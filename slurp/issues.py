@@ -167,7 +167,7 @@ class GitHub():
         self._page_num = self._load_progress() # load past progress
         self._count = self._page_num * self.per_page # if per page is 100 so total fetched is 0*100, 1*100, etc.
 
-        while self._count < 300: #self.issue_max:
+        while self._count < self.issue_max:
             try:
                 issue_page = self.repo.get_issues(state=state).get_page(self._page_num)
                 if not issue_page:
