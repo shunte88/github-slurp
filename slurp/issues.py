@@ -12,16 +12,26 @@ class GitHub():
         # Authorise the github API
         self.per_page = per_page
         self.issue_max=issue_max
-        self.pat = pat
         self.base = './data'
-        self.gh = self._connect()
+        if type(pat) is list:
+            self.pat_round_robin = True
+            self.pat_index = 0
+            self.pat_list = pat
+        elif type(pat) is str:
+            self.pat = pat
+            self.pat_list = []
+            self.pat_index = 0
+            self.pat_round_robin = False
+        else:
+            logging.error(f'Invalid GitHub token entered, authentication failed.')
+            raise ValueError('Invalid GitHub token entered, authentication failed.')
+        self._next_pat()
         if self.gh and repo:
             self.repo = self.gh.get_repo(repo)
             logging.debug(f'* * *  {self.repo.name}  * * *')
             self.base = self.repo.full_name.replace('/', '_')
             self.base = os.path.join('./data', self.base)
             self._init_base()
-        ###print(self.issues_file, self.pull_requests_file, self.last_page_file,self.per_page, self.issue_max) 
 
     def __enter__(self):
         return self
@@ -30,11 +40,25 @@ class GitHub():
         self.gh.close()
         return
 
+    def _next_pat(self):
+        if self.pat_round_robin:
+            self.pat = self.pat_list[self.pat_index]
+            self.pat_index = (self.pat_index + 1) % len(self.pat_list)
+        # [re]connect to the API
+        self.gh = self._connect()
+        '''
+        if self.rate_limit < 100:
+            logging.warning(f'Rate limit is {rate_limit}, consider adding more tokens to the pool.')
+            self.gh.close()
+            self._next_pat(
+        '''
+
     def _connect(self):
         auth = Auth.Token(self.pat)
         gh = Github(auth=auth, per_page=self.per_page)
         try:
             gh.get_user().login
+            self.rate_limit = gh.get_rate_limit()
             return gh
         except GithubException as e:
             logging.warning(f'No valid GitHub token entered, authentication failed: {e}.')
@@ -192,10 +216,14 @@ class GitHub():
                 logging.error(f'Encountered Github Exception {e.status} {e.message} {e.headers}')
                 self._save_progress([], [])
                 if e.status == 403 and self.gh is not None:
-                    reset_time = self.gh.rate_limiting_resettime
-                    wait_time = max(reset_time - time.time(), 60*10)
-                    logging.info(f'Rate limit, sleeping for {wait_time} seconds')
-                    time.sleep(wait_time) # sleep
+                    if self.pat_round_robin:
+                        self._next_pat()    
+                        logging.info(f'Rotate on token pool')
+                    else:
+                        reset_time = self.gh.rate_limiting_resettime
+                        wait_time = max(reset_time - time.time(), 60*10)
+                        logging.info(f'Rate limit, sleeping for {wait_time} seconds')
+                        time.sleep(wait_time) # sleep
                     continue
                 else:
                     logging.error(f'Unsuporrted error {e}')
