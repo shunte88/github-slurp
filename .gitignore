@@ -88,4 +88,4 @@ cython_debug/
 *.csv
 
 # secrets
-scrape/secrets.py
+slurp/secrets.py
