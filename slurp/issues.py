@@ -21,6 +21,7 @@ class GitHub():
             self.base = self.repo.full_name.replace('/', '_')
             self.base = os.path.join('./data', self.base)
             self._init_base()
+        ###print(self.issues_file, self.pull_requests_file, self.last_page_file,self.per_page, self.issue_max) 
 
     def __enter__(self):
         return self
@@ -99,15 +100,16 @@ class GitHub():
                 "id": issue.id,
                 "type": issue_type,
                 "state": issue.state,
+                "state_reason": issue.state_reason,
                 "title": issue.title,
                 "body": issue.body,
                 "author": issue.user.login,
                 "created_at": issue.created_at,
                 "assignees": assignee_list,
                 "updated_at": issue.updated_at,
-                "updated_by": issue.user.updated_by,
+                #"updated_by": issue.user.updated_by,
                 "closed_at": issue.closed_at,
-                "closed_by": issue.user.closed_by,
+                #"closed_by": issue.user.closed_by,
                 "url": issue.html_url,
                 "labels": [(label.name, label.description) for label in labels],
                 "comments_list": comments,
@@ -153,7 +155,7 @@ class GitHub():
         with open(self.last_page_file, 'w') as f: # update the page to resume from
             f.write(str(self._page_num))
 
-        logging.info(f'Progress saved at {self.count} records... we\'ll resume from page {self._page_num}')
+        logging.info(f'Progress saved at {self._count} records... we\'ll resume from page {self._page_num}')
 
 
     # should we add data cleanup here?
@@ -165,7 +167,7 @@ class GitHub():
         self._page_num = self._load_progress() # load past progress
         self._count = self._page_num * self.per_page # if per page is 100 so total fetched is 0*100, 1*100, etc.
 
-        while self._count < self.issue_max:
+        while self._count < 300: #self.issue_max:
             try:
                 issue_page = self.repo.get_issues(state=state).get_page(self._page_num)
                 if not issue_page:

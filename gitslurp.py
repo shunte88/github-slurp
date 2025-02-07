@@ -12,4 +12,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # slurp the issues and PR - all states
-    GitHub(pat=args.token,repo=args.repo).slurp_issues(state='all')
+    GitHub(pat=args.token,repo=args.repo, issue_max=80000).slurp_issues()
