@@ -40,6 +40,16 @@ class GitHub():
         self.gh.close()
         return
 
+    def _rate_limit(self):
+        self.rate_limit = self.gh.get_rate_limit()
+
+    def within_rate_limit(self):
+        self._rate_limit()
+        if not self.rate_limit.rate.remaining:
+            logging.warning(f"Github rate limit exceeded, wait until {self.rate_limit.rate.reset} GMT")
+            return False
+        return True
+    
     def _next_pat(self):
         if self.pat_round_robin:
             self.pat = self.pat_list[self.pat_index]
@@ -58,7 +68,6 @@ class GitHub():
         gh = Github(auth=auth, per_page=self.per_page)
         try:
             gh.get_user().login
-            self.rate_limit = gh.get_rate_limit()
             return gh
         except GithubException as e:
             logging.warning(f'No valid GitHub token entered, authentication failed: {e}.')
@@ -84,9 +93,7 @@ class GitHub():
         comment_thread = ''
 
         for comment in comment_list:
-            # if comment.user.login == 'google-ml-butler[bot]': # only comments feedback URLs, skip
-            #     continue
-            
+
             # Add possibly helpful role of authors in the thread
             author = comment.user.login
             if author == issue_creator:
@@ -110,6 +117,16 @@ class GitHub():
                     })
         return comments, comment_thread
 
+    def _fetch_comments(self, issue):
+        """
+        pull comments for a single issue
+        we check that the rate limit is not exceeded
+        and call round robin connection if needed
+        """
+        if not self.within_rate_limit:
+            self._next_pat
+        return issue.get_comments()
+
     def _fetch_issue(self, issue):
         """
         Processes data for a single issue and returns it in a dictionary
@@ -117,7 +134,8 @@ class GitHub():
         issue_type = 'pull_request' if issue.pull_request else 'issue'
         
         assignee_list = [user.login for user in issue.assignees]
-        comments, comment_thread = self._process_comment(issue.get_comments(), issue.id, issue.user.login, assignee_list)
+        comments, comment_thread = self._process_comment(
+            self._fetch_comments(issue), issue.id, issue.user.login, assignee_list)
         labels = issue.labels
         
         return  {
